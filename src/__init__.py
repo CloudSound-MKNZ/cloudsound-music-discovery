@@ -1,0 +1,2 @@
+"""Music Discovery Service."""
+

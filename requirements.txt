@@ -11,8 +11,9 @@ grpcio>=1.62.0
 grpcio-tools>=1.62.0
 prometheus-client>=0.20.0
 structlog>=24.1.0
-youtube-dl>=2021.12.17
 
+# yt-dlp is the maintained fork of youtube-dl
+yt-dlp>=2024.1.0
 
 # Shared utilities package
 cloudsound-shared @ git+https://github.com/CloudSound-MKNZ/cloudsound-shared.git@main
