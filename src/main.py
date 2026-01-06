@@ -8,18 +8,13 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import structlog
 
 from cloudsound_shared.health import router as health_router
 from cloudsound_shared.metrics import get_metrics
-from cloudsound_shared.middleware.error_handler import (
-    http_exception_handler,
-    validation_exception_handler,
-    general_exception_handler,
-)
+from cloudsound_shared.middleware.error_handler import register_exception_handlers
 from cloudsound_shared.middleware.correlation import CorrelationIDMiddleware
 from cloudsound_shared.logging import configure_logging, get_logger
 from cloudsound_shared.config.settings import app_settings
@@ -169,10 +164,8 @@ app.add_middleware(
 # Correlation ID middleware
 app.add_middleware(CorrelationIDMiddleware)
 
-# Exception handlers
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(Exception, general_exception_handler)
+# Register all exception handlers
+register_exception_handlers(app)
 
 # Include health router
 app.include_router(health_router)
