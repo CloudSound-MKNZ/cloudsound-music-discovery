@@ -166,10 +166,13 @@ class EventConsumer:
         topic = message.topic
         value = message.value
         
-        logger.debug(
-            "event_consumer_message_received",
+        # Debug: log the raw message value
+        logger.info(
+            "event_consumer_message_raw",
             topic=topic,
             key=message.key,
+            value_type=str(type(value)),
+            value_content=str(value)[:500] if value else "None",
         )
         
         # Determine event type from topic
@@ -201,13 +204,24 @@ class EventConsumer:
                 concert_id=event.concert_id,
                 name=event.name,
                 event_type=event_type,
+                has_description=bool(event.description),
+                description_length=len(event.description) if event.description else 0,
             )
             
             # Extract links from description
             links = []
             if event.description:
+                logger.info(
+                    "event_consumer_extracting_links",
+                    description_preview=event.description[:200] if event.description else "",
+                )
                 links = self.link_extractor.extract_downloadable_links(
                     event.description
+                )
+                logger.info(
+                    "event_consumer_extraction_result",
+                    link_count=len(links),
+                    links=[str(l) for l in links],
                 )
             
             if links:
@@ -224,9 +238,10 @@ class EventConsumer:
                     "concert_name": event.name,
                 })
             else:
-                logger.debug(
+                logger.info(
                     "event_consumer_no_links",
                     concert_id=event.concert_id,
+                    has_description=bool(event.description),
                 )
                 
         except Exception as e:
