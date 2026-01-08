@@ -40,11 +40,11 @@ class ConcertEvent:
     def from_dict(cls, data: Dict[str, Any], event_type: str) -> "ConcertEvent":
         """Create from dictionary."""
         return cls(
-            concert_id=str(data.get("id", "")),
-            name=data.get("name", ""),
+            concert_id=str(data.get("concert_id", data.get("id", ""))),
+            name=data.get("name", data.get("location", "")),
             description=data.get("description"),
             artists=data.get("artists", []),
-            venue=data.get("venue"),
+            venue=data.get("venue", data.get("location")),
             date=data.get("date"),
             event_type=event_type,
         )
