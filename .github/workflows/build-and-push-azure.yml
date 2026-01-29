@@ -1,0 +1,48 @@
+# Build and push this service's image to Azure Container Registry (Option B multi-repo).
+# Add secrets to this repo: ACR_LOGIN_SERVER, ACR_USERNAME, ACR_PASSWORD
+name: Build and Push to ACR
+
+on:
+  push:
+    branches:
+      - main
+      - production
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Derive image name from repo
+        id: meta
+        run: |
+          SERVICE_NAME="${GITHUB_REPOSITORY#*/}"
+          SERVICE_NAME="${SERVICE_NAME#cloudsound-}"
+          echo "service=$SERVICE_NAME" >> $GITHUB_OUTPUT
+          echo "Building image: ${{ secrets.ACR_LOGIN_SERVER }}/$SERVICE_NAME"
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.service }}:latest
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.service }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.service }}:buildcache
+          cache-to: type=registry,ref=${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.service }}:buildcache,mode=max

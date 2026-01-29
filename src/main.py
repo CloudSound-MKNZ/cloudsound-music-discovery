@@ -8,13 +8,18 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import structlog
 
 from cloudsound_shared.health import router as health_router
 from cloudsound_shared.metrics import get_metrics
-from cloudsound_shared.middleware.error_handler import register_exception_handlers
+from cloudsound_shared.middleware.error_handler import (
+    http_exception_handler,
+    validation_exception_handler,
+    general_exception_handler,
+)
 from cloudsound_shared.middleware.correlation import CorrelationIDMiddleware
 from cloudsound_shared.logging import configure_logging, get_logger
 from cloudsound_shared.config.settings import app_settings
@@ -164,8 +169,10 @@ app.add_middleware(
 # Correlation ID middleware
 app.add_middleware(CorrelationIDMiddleware)
 
-# Register all exception handlers
-register_exception_handlers(app)
+# Exception handlers
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 # Include health router
 app.include_router(health_router)
@@ -336,81 +343,6 @@ async def get_clients_status() -> Dict[str, Any]:
         status["bandcamp"] = bandcamp_client.get_circuit_breaker_stats()
     
     return status
-
-
-class DirectDownloadRequest(BaseModel):
-    """Request for direct download (bypasses queue)."""
-    url: str
-    context: Optional[Dict[str, Any]] = None
-
-
-class DirectDownloadResponse(BaseModel):
-    """Response from direct download."""
-    success: bool
-    url: str
-    link_type: str
-    status: str
-    title: Optional[str] = None
-    file_path: Optional[str] = None
-    file_size: Optional[int] = None
-    error: Optional[str] = None
-
-
-@app.post(
-    f"{app_settings.api_prefix}/discover/download-direct",
-    response_model=DirectDownloadResponse,
-)
-async def download_direct(request: DirectDownloadRequest) -> DirectDownloadResponse:
-    """Download music directly (bypasses queue, for testing).
-    
-    This endpoint performs the download synchronously and returns the result.
-    Use queue-download for production workloads.
-    """
-    if not downloader:
-        raise StarletteHTTPException(
-            status_code=503,
-            detail="Downloader service not available",
-        )
-    
-    # Determine link type and create extracted link
-    link_type = LinkExtractor.get_link_type(request.url)
-    
-    video_id = None
-    artist = None
-    slug = None
-    content_type = "track"
-    
-    if link_type == LinkType.YOUTUBE:
-        video_id = YouTubeClient.extract_video_id(request.url)
-    elif link_type == LinkType.BANDCAMP:
-        parsed = BandcampClient.parse_url(request.url)
-        if parsed:
-            artist = parsed.get("artist")
-            slug = parsed.get("slug")
-            content_type = parsed.get("type", "track")
-    
-    extracted_link = ExtractedLink(
-        url=request.url,
-        link_type=link_type,
-        video_id=video_id,
-        artist=artist,
-        slug=slug,
-        content_type=content_type,
-    )
-    
-    # Perform download
-    result = await downloader.download(extracted_link)
-    
-    return DirectDownloadResponse(
-        success=result.status.value == "completed",
-        url=request.url,
-        link_type=link_type.value,
-        status=result.status.value,
-        title=result.title,
-        file_path=result.file_path,
-        file_size=result.file_size,
-        error=result.error,
-    )
 
 
 if __name__ == "__main__":
